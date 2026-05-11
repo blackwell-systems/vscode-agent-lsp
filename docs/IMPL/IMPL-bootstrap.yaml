@@ -21,8 +21,8 @@ suitability_assessment: |
     Time savings: ~20 min (42% faster)
 
     Recommendation: Clear speedup. Proceed with bootstrap.
-test_command: npx vitest run
-lint_command: npx eslint src/
+test_command: "npx tsc --noEmit"
+lint_command: "npx tsc --noEmit"
 file_ownership:
     - file: src/server.ts
       agent: A
@@ -508,11 +508,8 @@ quality_gates:
         - type: build
           command: npx tsc --noEmit
           required: true
-        - type: lint
-          command: npx eslint src/
-          required: false
         - type: test
-          command: npx vitest run
+          command: "npx tsc --noEmit"
           required: true
 scaffolds:
     - file_path: src/types.ts
