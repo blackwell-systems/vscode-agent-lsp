@@ -425,6 +425,7 @@ waves:
           files:
             - src/inspector-panel.ts
             - src/inspector-panel.test.ts
+      base_commit: dc8a6d461fdecef3eb77898b6fcb4cd921980529
     - number: 2
       agents:
         - id: F
@@ -738,4 +739,3 @@ critic_report:
     reviewed_at: "2026-05-11T05:48:38Z"
     issue_count: 0
 state: WAVE_PENDING
-original_branch: main
