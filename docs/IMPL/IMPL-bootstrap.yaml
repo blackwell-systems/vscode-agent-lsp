@@ -23,7 +23,7 @@ suitability_assessment: |
     Recommendation: Clear speedup. Proceed with bootstrap.
 test_command: "npx vitest run"
 lint_command: "npx eslint src/"
-state: SCOUT_PENDING
+state: SCAFFOLDS_COMMITTED
 quality_gates:
     level: standard
     gates:
@@ -37,7 +37,7 @@ quality_gates:
           command: "npx vitest run"
           required: true
 scaffolds:
-    - status: pending
+    - status: "committed (8824ed2)"
       file_path: "src/types.ts"
       contents: |
         import * as vscode from 'vscode';
@@ -102,7 +102,7 @@ scaffolds:
           onConfigChange: vscode.Event<AgentLspConfig>;
         }
       import_path: "./types"
-    - status: pending
+    - status: "committed (8824ed2)"
       file_path: "package.json"
       contents: |
         {
@@ -180,7 +180,7 @@ scaffolds:
           }
         }
       import_path: "N/A"
-    - status: pending
+    - status: "committed (8824ed2)"
       file_path: "tsconfig.json"
       contents: |
         {
@@ -202,7 +202,7 @@ scaffolds:
           "exclude": ["node_modules", "dist"]
         }
       import_path: "N/A"
-    - status: pending
+    - status: "committed (8824ed2)"
       file_path: "esbuild.config.ts"
       contents: |
         import * as esbuild from 'esbuild';
@@ -221,7 +221,7 @@ scaffolds:
           minify: production,
         }).catch(() => process.exit(1));
       import_path: "N/A"
-    - status: pending
+    - status: "committed (8824ed2)"
       file_path: ".vscodeignore"
       contents: |
         .vscode/**
