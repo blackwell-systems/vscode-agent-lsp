@@ -737,5 +737,4 @@ critic_report:
     summary: Skipped by operator (--skip-critic)
     reviewed_at: "2026-05-11T05:48:38Z"
     issue_count: 0
-state: SCAFFOLDS_COMMITTED
-original_branch: main
+state: WAVE_PENDING
