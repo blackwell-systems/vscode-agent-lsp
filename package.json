@@ -5,10 +5,25 @@
   "version": "0.1.0",
   "publisher": "blackwell-systems",
   "license": "MIT",
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Programming Languages", "Linters", "Other"],
-  "keywords": ["mcp", "lsp", "ai", "agent", "code-intelligence", "refactoring"],
-  "activationEvents": ["onStartupFinished"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "mcp",
+    "lsp",
+    "ai",
+    "agent",
+    "code-intelligence",
+    "refactoring"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [],
@@ -22,7 +37,9 @@
         },
         "agent-lsp.args": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Additional arguments for agent-lsp"
         },
@@ -33,24 +50,32 @@
         },
         "agent-lsp.trace.server": {
           "type": "string",
-          "enum": ["off", "messages", "verbose"],
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
           "default": "off",
           "description": "Trace level for server communication"
         }
       }
     },
     "viewsContainers": {
-      "activitybar": [{
-        "id": "agent-lsp",
-        "title": "Agent LSP",
-        "icon": "resources/icon.svg"
-      }]
+      "activitybar": [
+        {
+          "id": "agent-lsp",
+          "title": "Agent LSP",
+          "icon": "resources/icon.svg"
+        }
+      ]
     },
     "views": {
-      "agent-lsp": [{
-        "id": "agentLsp.inspector",
-        "name": "Inspection"
-      }]
+      "agent-lsp": [
+        {
+          "id": "agentLsp.inspector",
+          "name": "Inspection"
+        }
+      ]
     }
   },
   "scripts": {
@@ -62,13 +87,14 @@
     "compile": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/node": "^25.6.2",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
+    "@vscode/vsce": "^2.22.0",
     "esbuild": "^0.20.0",
     "eslint": "^8.56.0",
     "typescript": "^5.3.0",
-    "vitest": "^1.2.0",
-    "@vscode/vsce": "^2.22.0"
+    "vitest": "^1.2.0"
   }
 }

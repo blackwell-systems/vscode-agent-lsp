@@ -1,0 +1,26 @@
+{
+  "entries": {
+    "f8dbbc686d0f8efbd8fa0b8ce9a4635b": {
+      "build": {
+        "gate_type": "build",
+        "command": "npx tsc --noEmit",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-05-10T22:59:24.977535-07:00"
+      },
+      "test": {
+        "gate_type": "test",
+        "command": "npx tsc --noEmit",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "from_cache": true,
+        "cached_at": "2026-05-10T22:59:25.50658-07:00"
+      }
+    }
+  }
+}
