@@ -5,6 +5,10 @@
   "version": "0.1.0",
   "publisher": "blackwell-systems",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blackwell-systems/vscode-agent-lsp"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
