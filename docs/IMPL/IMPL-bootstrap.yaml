@@ -1,0 +1,730 @@
+title: "VS Code Extension for agent-lsp Bootstrap"
+feature_slug: bootstrap
+verdict: SUITABLE
+suitability_assessment: |
+    File decomposition: 7 source modules + build config + manifest = 12+ files across 6 agents.
+    Each concern (lifecycle, UI, skills, decorations, inspector, packaging) maps to disjoint files.
+    No investigation-first items: requirements are fully specified.
+    Interface discoverability: the MCP protocol (stdio JSON-RPC) and VS Code extension API
+    are well-defined; cross-agent interfaces are the server lifecycle events and settings access.
+    Parallelization value: high. Build/test cycle (tsc + vitest) is non-trivial, and each agent
+    owns 2-3 files with real logic. 5 parallel agents in Wave 1 after scaffold.
+
+    Estimated times:
+    - Scout phase: ~8 min (architecture design, interface contracts, IMPL doc)
+    - Agent execution: ~12 min (5 agents x 8 min avg, single wave parallel)
+    - Integration wave: ~5 min (1 agent wiring extension.ts)
+    - Merge and verification: ~3 min
+    Total SAW time: ~28 min
+
+    Sequential baseline: ~48 min (6 agents x 8 min avg)
+    Time savings: ~20 min (42% faster)
+
+    Recommendation: Clear speedup. Proceed with bootstrap.
+test_command: "npx vitest run"
+lint_command: "npx eslint src/"
+state: SCOUT_PENDING
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: "npx tsc --noEmit"
+          required: true
+        - type: lint
+          command: "npx eslint src/"
+          required: false
+        - type: test
+          command: "npx vitest run"
+          required: true
+scaffolds:
+    - status: pending
+      file_path: "src/types.ts"
+      contents: |
+        import * as vscode from 'vscode';
+
+        export type ConnectionState = 'connected' | 'starting' | 'failed' | 'stopped';
+
+        export interface ConnectionStateChange {
+          state: ConnectionState;
+          version?: string;
+          startedAt?: number;
+        }
+
+        export interface AgentLspConfig {
+          binaryPath: string;
+          args: string[];
+          autoStart: boolean;
+          traceLevel: 'off' | 'messages' | 'verbose';
+        }
+
+        export interface SkillDescriptor {
+          name: string;
+          description: string;
+          arguments?: SkillArgument[];
+        }
+
+        export interface SkillArgument {
+          name: string;
+          description: string;
+          required: boolean;
+          default?: string;
+        }
+
+        export interface BlastRadiusEntry {
+          symbolName: string;
+          line: number;
+          callerCount: number;
+          testCallerCount: number;
+        }
+
+        export interface InspectionFinding {
+          severity: 'error' | 'warning' | 'info';
+          checkType: string;
+          file: string;
+          line: number;
+          column: number;
+          message: string;
+        }
+
+        export interface IAgentLspServer {
+          readonly state: ConnectionState;
+          readonly onStateChange: vscode.Event<ConnectionStateChange>;
+          readonly outputChannel: vscode.OutputChannel;
+          start(): Promise<void>;
+          stop(): Promise<void>;
+          restart(): Promise<void>;
+          sendRequest(method: string, params?: unknown): Promise<unknown>;
+          sendNotification(method: string, params?: unknown): void;
+        }
+
+        export interface ISettingsProvider {
+          getConfig(): AgentLspConfig;
+          onConfigChange: vscode.Event<AgentLspConfig>;
+        }
+      import_path: "./types"
+    - status: pending
+      file_path: "package.json"
+      contents: |
+        {
+          "name": "vscode-agent-lsp",
+          "displayName": "agent-lsp",
+          "description": "Language intelligence for AI agents: 65 tools, 24 skills, 30 languages.",
+          "version": "0.1.0",
+          "publisher": "blackwell-systems",
+          "license": "MIT",
+          "engines": { "vscode": "^1.85.0" },
+          "categories": ["Programming Languages", "Linters", "Other"],
+          "keywords": ["mcp", "lsp", "ai", "agent", "code-intelligence", "refactoring"],
+          "activationEvents": ["onStartupFinished"],
+          "main": "./dist/extension.js",
+          "contributes": {
+            "commands": [],
+            "configuration": {
+              "title": "agent-lsp",
+              "properties": {
+                "agent-lsp.binaryPath": {
+                  "type": "string",
+                  "default": "",
+                  "description": "Path to agent-lsp binary (leave empty to use PATH)"
+                },
+                "agent-lsp.args": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "default": [],
+                  "description": "Additional arguments for agent-lsp"
+                },
+                "agent-lsp.autoStart": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Start server automatically on workspace open"
+                },
+                "agent-lsp.trace.server": {
+                  "type": "string",
+                  "enum": ["off", "messages", "verbose"],
+                  "default": "off",
+                  "description": "Trace level for server communication"
+                }
+              }
+            },
+            "viewsContainers": {
+              "activitybar": [{
+                "id": "agent-lsp",
+                "title": "Agent LSP",
+                "icon": "resources/icon.svg"
+              }]
+            },
+            "views": {
+              "agent-lsp": [{
+                "id": "agentLsp.inspector",
+                "name": "Inspection"
+              }]
+            }
+          },
+          "scripts": {
+            "build": "node esbuild.config.ts",
+            "watch": "node esbuild.config.ts --watch",
+            "lint": "eslint src/",
+            "test": "vitest run",
+            "package": "vsce package",
+            "compile": "tsc --noEmit"
+          },
+          "devDependencies": {
+            "@types/vscode": "^1.85.0",
+            "@typescript-eslint/eslint-plugin": "^7.0.0",
+            "@typescript-eslint/parser": "^7.0.0",
+            "esbuild": "^0.20.0",
+            "eslint": "^8.56.0",
+            "typescript": "^5.3.0",
+            "vitest": "^1.2.0",
+            "@vscode/vsce": "^2.22.0"
+          }
+        }
+      import_path: "N/A"
+    - status: pending
+      file_path: "tsconfig.json"
+      contents: |
+        {
+          "compilerOptions": {
+            "module": "commonjs",
+            "target": "ES2022",
+            "lib": ["ES2022"],
+            "outDir": "dist",
+            "rootDir": "src",
+            "strict": true,
+            "esModuleInterop": true,
+            "skipLibCheck": true,
+            "forceConsistentCasingInFileNames": true,
+            "resolveJsonModule": true,
+            "declaration": true,
+            "sourceMap": true
+          },
+          "include": ["src/**/*.ts"],
+          "exclude": ["node_modules", "dist"]
+        }
+      import_path: "N/A"
+    - status: pending
+      file_path: "esbuild.config.ts"
+      contents: |
+        import * as esbuild from 'esbuild';
+
+        const production = process.argv.includes('--production');
+
+        esbuild.build({
+          entryPoints: ['src/extension.ts'],
+          bundle: true,
+          outfile: 'dist/extension.js',
+          external: ['vscode'],
+          format: 'cjs',
+          platform: 'node',
+          target: 'node18',
+          sourcemap: !production,
+          minify: production,
+        }).catch(() => process.exit(1));
+      import_path: "N/A"
+    - status: pending
+      file_path: ".vscodeignore"
+      contents: |
+        .vscode/**
+        src/**
+        node_modules/**
+        .gitignore
+        tsconfig.json
+        esbuild.config.ts
+        **/*.map
+        docs/**
+      import_path: "N/A"
+interface_contracts:
+    - name: IAgentLspServer
+      description: |
+        Server lifecycle interface. Implemented by server.ts, consumed by
+        extension.ts (start/stop), status-bar.ts (state events), skills.ts (sendRequest),
+        decorations.ts (sendRequest for blast_radius).
+      definition: |
+        interface IAgentLspServer {
+          readonly state: ConnectionState;
+          readonly onStateChange: vscode.Event<ConnectionStateChange>;
+          readonly outputChannel: vscode.OutputChannel;
+          start(): Promise<void>;
+          stop(): Promise<void>;
+          restart(): Promise<void>;
+          sendRequest(method: string, params?: unknown): Promise<unknown>;
+          sendNotification(method: string, params?: unknown): void;
+        }
+      location: "src/types.ts"
+    - name: ISettingsProvider
+      description: |
+        Configuration accessor. Implemented by settings.ts, consumed by server.ts
+        (binary path, args), status-bar.ts (display prefs).
+      definition: |
+        interface ISettingsProvider {
+          getConfig(): AgentLspConfig;
+          onConfigChange: vscode.Event<AgentLspConfig>;
+        }
+      location: "src/types.ts"
+    - name: ConnectionState
+      description: "Union type representing server connection states."
+      definition: |
+        type ConnectionState = 'connected' | 'starting' | 'failed' | 'stopped';
+      location: "src/types.ts"
+    - name: BlastRadiusEntry
+      description: "Data structure for inline decoration caller counts."
+      definition: |
+        interface BlastRadiusEntry {
+          symbolName: string;
+          line: number;
+          callerCount: number;
+          testCallerCount: number;
+        }
+      location: "src/types.ts"
+    - name: InspectionFinding
+      description: "Single finding from /lsp-inspect, displayed in TreeView."
+      definition: |
+        interface InspectionFinding {
+          severity: 'error' | 'warning' | 'info';
+          checkType: string;
+          file: string;
+          line: number;
+          column: number;
+          message: string;
+        }
+      location: "src/types.ts"
+    - name: SkillDescriptor
+      description: "Skill metadata from prompts/list MCP response."
+      definition: |
+        interface SkillDescriptor {
+          name: string;
+          description: string;
+          arguments?: SkillArgument[];
+        }
+      location: "src/types.ts"
+file_ownership:
+    - file: "src/server.ts"
+      agent: A
+      wave: 1
+      action: new
+    - file: "src/server.test.ts"
+      agent: A
+      wave: 1
+      action: new
+    - file: "src/settings.ts"
+      agent: B
+      wave: 1
+      action: new
+    - file: "src/settings.test.ts"
+      agent: B
+      wave: 1
+      action: new
+    - file: "src/status-bar.ts"
+      agent: B
+      wave: 1
+      action: new
+    - file: "src/skills.ts"
+      agent: C
+      wave: 1
+      action: new
+    - file: "src/skills.test.ts"
+      agent: C
+      wave: 1
+      action: new
+    - file: "src/decorations.ts"
+      agent: D
+      wave: 1
+      action: new
+    - file: "src/decorations.test.ts"
+      agent: D
+      wave: 1
+      action: new
+    - file: "src/inspector-panel.ts"
+      agent: E
+      wave: 1
+      action: new
+    - file: "src/inspector-panel.test.ts"
+      agent: E
+      wave: 1
+      action: new
+    - file: "src/extension.ts"
+      agent: F
+      wave: 2
+      action: new
+      depends_on: ["A", "B", "C", "D", "E"]
+    - file: "src/extension.test.ts"
+      agent: F
+      wave: 2
+      action: new
+    - file: "README.md"
+      agent: F
+      wave: 2
+      action: new
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## What to Implement
+
+            Implement `src/server.ts`: the agent-lsp process manager and MCP communication layer.
+
+            This module spawns `agent-lsp` as a child process via stdio, implements the
+            IAgentLspServer interface from `src/types.ts`, handles process lifecycle
+            (start, stop, restart with exponential backoff), and provides JSON-RPC
+            request/response over stdin/stdout.
+
+            ## Interfaces to Implement
+
+            - `IAgentLspServer` from `./types`
+
+            ## Interfaces to Call
+
+            - `ISettingsProvider.getConfig()` (passed as constructor parameter)
+            - `vscode.OutputChannel` (created externally, passed in)
+
+            ## Key Behaviors
+
+            1. Binary discovery: check config.binaryPath, then PATH lookup, then ~/.agent-lsp/bin/agent-lsp
+            2. Spawn via `child_process.spawn` with stdio: ['pipe', 'pipe', 'pipe']
+            3. Parse stdout as JSON-RPC messages (newline-delimited JSON)
+            4. Pipe stderr to the OutputChannel
+            5. On crash: exponential backoff restart (1s, 2s, 4s, max 30s)
+            6. Fire `onStateChange` event on every transition
+            7. `sendRequest` returns a Promise that resolves when the matching response arrives (by JSON-RPC id)
+            8. Track pending requests by id; reject all on disconnect
+            9. `stop()` sends SIGTERM, waits 3s, then SIGKILL if still running
+
+            ## Factory Function
+
+            ```typescript
+            export function createServer(
+              settings: ISettingsProvider,
+              output: vscode.OutputChannel
+            ): IAgentLspServer
+            ```
+
+            ## Tests to Write (src/server.test.ts)
+
+            1. TestBinaryDiscovery_UsesConfigPath - when binaryPath is set, uses it directly
+            2. TestBinaryDiscovery_FallsBackToPATH - empty config checks PATH
+            3. TestExponentialBackoff - restart delay doubles: 1s, 2s, 4s up to 30s max
+            4. TestSendRequest_MatchesResponseById - correlates JSON-RPC id in response
+            5. TestStop_SendsSIGTERM - verifies graceful shutdown signal
+
+            ## Verification Gate
+
+            ```bash
+            npx tsc --noEmit && npx vitest run src/server.test.ts
+            ```
+
+            ## Constraints
+
+            - Do NOT import or reference extension.ts, skills.ts, decorations.ts, or inspector-panel.ts
+            - Do NOT create the OutputChannel; accept it as a constructor parameter
+            - Do NOT handle VS Code command registration; that is extension.ts (Wave 2)
+            - Use `vscode.EventEmitter<ConnectionStateChange>` for the onStateChange event
+            - Mock child_process.spawn in tests using vi.mock('child_process')
+          files:
+            - "src/server.ts"
+            - "src/server.test.ts"
+        - id: B
+          task: |
+            ## What to Implement
+
+            Implement `src/settings.ts` and `src/status-bar.ts`.
+
+            **settings.ts**: Configuration accessor implementing ISettingsProvider. Reads from
+            `vscode.workspace.getConfiguration('agent-lsp')` and fires change events.
+
+            **status-bar.ts**: Status bar item that reflects server connection state.
+
+            ## Interfaces to Implement
+
+            - `ISettingsProvider` from `./types` (in settings.ts)
+
+            ## Interfaces to Call
+
+            - `IAgentLspServer.onStateChange` (in status-bar.ts, passed as parameter)
+            - `vscode.workspace.getConfiguration('agent-lsp')` (in settings.ts)
+
+            ## Key Behaviors
+
+            settings.ts:
+            1. `getConfig()` reads all 4 settings and returns an AgentLspConfig object
+            2. Listen to `vscode.workspace.onDidChangeConfiguration` for the 'agent-lsp' section
+            3. Fire `onConfigChange` when any setting changes
+            4. Factory: `export function createSettingsProvider(): ISettingsProvider`
+
+            status-bar.ts:
+            1. Create a StatusBarItem with alignment left, priority 100
+            2. Subscribe to server.onStateChange and update:
+               - connected: "$(zap) agent-lsp" with green color
+               - starting: "$(sync~spin) agent-lsp" with warning color
+               - failed: "$(error) agent-lsp" with error background
+               - stopped: "$(circle-slash) agent-lsp"
+            3. Set command to 'agent-lsp.restart' on click
+            4. Set tooltip to "agent-lsp v{version} - up {uptime}" from ConnectionStateChange
+            5. Show the item immediately
+            6. Factory: `export function createStatusBar(server: IAgentLspServer): vscode.Disposable`
+
+            ## Tests to Write (src/settings.test.ts)
+
+            1. TestGetConfig_ReadsAllSettings - all 4 settings correctly mapped
+            2. TestOnConfigChange_FiresOnChange - mock workspace config change triggers event
+            3. TestStatusBar_ConnectedState - text includes $(zap) icon
+            4. TestStatusBar_FailedState - text includes $(error) icon
+
+            ## Verification Gate
+
+            ```bash
+            npx tsc --noEmit && npx vitest run src/settings.test.ts
+            ```
+
+            ## Constraints
+
+            - Do NOT import server.ts directly; accept IAgentLspServer as a parameter in status-bar.ts
+            - Do NOT register commands; that is extension.ts (Wave 2)
+            - Mock vscode.workspace.getConfiguration in tests
+          files:
+            - "src/settings.ts"
+            - "src/settings.test.ts"
+            - "src/status-bar.ts"
+        - id: C
+          task: |
+            ## What to Implement
+
+            Implement `src/skills.ts`: command palette registration for all agent-lsp skills,
+            with QuickPick/InputBox prompting for skill arguments.
+
+            ## Interfaces to Call
+
+            - `IAgentLspServer.sendRequest('prompts/list', {})` to get skill list
+            - `IAgentLspServer.sendRequest('prompts/get', { name, arguments })` to invoke a skill
+            - `SkillDescriptor` and `SkillArgument` from `./types`
+
+            ## Key Behaviors
+
+            1. On registration, call `prompts/list` to get available skills
+            2. Register a VS Code command for each skill: `agent-lsp.skill.{name}`
+            3. When a skill command is invoked:
+               a. Check if it has arguments (from SkillDescriptor.arguments)
+               b. For each required argument, show InputBox with description as prompt
+               c. Default value for file-path arguments: active editor file path
+               d. Call `prompts/get` with collected arguments
+               e. Show result in the agent-lsp output channel
+            4. Register a master command `agent-lsp.skills` that shows QuickPick of all skills
+            5. Factory: `export function registerSkills(server: IAgentLspServer, context: vscode.ExtensionContext): Promise<vscode.Disposable[]>`
+
+            ## Tests to Write (src/skills.test.ts)
+
+            1. TestRegisterSkills_CreatesCommands - mock server returns skills, commands registered
+            2. TestSkillInvocation_PromptsForArgs - skill with args shows InputBox
+            3. TestSkillInvocation_DefaultsToActiveFile - file arg defaults to active editor
+            4. TestMasterCommand_ShowsQuickPick - agent-lsp.skills shows picker
+
+            ## Verification Gate
+
+            ```bash
+            npx tsc --noEmit && npx vitest run src/skills.test.ts
+            ```
+
+            ## Constraints
+
+            - Do NOT import server.ts directly; accept IAgentLspServer as a parameter
+            - Do NOT start the server; assume it is already connected when registerSkills is called
+            - Do NOT hardcode skill names; dynamically register from prompts/list response
+            - Handle the case where prompts/list returns empty array gracefully
+          files:
+            - "src/skills.ts"
+            - "src/skills.test.ts"
+        - id: D
+          task: |
+            ## What to Implement
+
+            Implement `src/decorations.ts`: inline blast radius decorations showing caller
+            counts for functions/methods in the active editor via CodeLens.
+
+            ## Interfaces to Call
+
+            - `IAgentLspServer.sendRequest('tools/call', { name: 'get_change_impact', arguments: { changed_files: [filePath] } })`
+            - `BlastRadiusEntry` from `./types`
+
+            ## Key Behaviors
+
+            1. Implement a class that satisfies `vscode.CodeLensProvider`
+            2. `provideCodeLenses(document)`:
+               a. Get the document file path
+               b. Check cache; if cached and not stale, return cached lenses
+               c. Call `get_change_impact` via server.sendRequest
+               d. Parse response into BlastRadiusEntry[]
+               e. Create a CodeLens at each entry's line with title: "{callerCount} callers ({testCallerCount} test)"
+            3. Cache results per file URI; invalidate on document save
+            4. Register `onDidChangeCodeLenses` event emitter; fire on save
+            5. Factory: `export function registerDecorations(server: IAgentLspServer, context: vscode.ExtensionContext): vscode.Disposable`
+            6. Register CodeLensProvider for all languages ({ scheme: 'file' })
+
+            ## Tests to Write (src/decorations.test.ts)
+
+            1. TestCodeLens_ShowsCallerCount - mock response produces correct lens title
+            2. TestCodeLens_CachesResults - second call returns cached, no server request
+            3. TestCodeLens_InvalidatesOnSave - save clears cache, next call hits server
+            4. TestCodeLens_HandlesEmptyResponse - empty response produces empty array
+
+            ## Verification Gate
+
+            ```bash
+            npx tsc --noEmit && npx vitest run src/decorations.test.ts
+            ```
+
+            ## Constraints
+
+            - Do NOT import server.ts directly; accept IAgentLspServer as a parameter
+            - Do NOT block the editor; if sendRequest fails, return empty array
+            - Use `vscode.EventEmitter<void>` for onDidChangeCodeLenses
+            - CodeLens command can be undefined (informational only)
+          files:
+            - "src/decorations.ts"
+            - "src/decorations.test.ts"
+        - id: E
+          task: |
+            ## What to Implement
+
+            Implement `src/inspector-panel.ts`: TreeView showing findings from the last
+            `/lsp-inspect` run.
+
+            ## Interfaces to Call
+
+            - `IAgentLspServer.sendRequest('resources/read', { uri: 'inspect://last' })`
+            - `InspectionFinding` from `./types`
+
+            ## Key Behaviors
+
+            1. Implement a class satisfying `vscode.TreeDataProvider<InspectionFinding>`
+            2. `getTreeItem(finding)`: return TreeItem with:
+               - Icon: ThemeIcon('error'), ThemeIcon('warning'), or ThemeIcon('info')
+               - Label: `{checkType}: {file}:{line}`
+               - Description: finding.message (truncated to 80 chars)
+               - Command: vscode.open with selection at finding location
+            3. `getChildren()`: return all findings as flat list
+            4. Load findings via `resources/read` with URI `inspect://last`
+            5. Provide `refresh()` method that re-fetches and fires `onDidChangeTreeData`
+            6. Watch `.agent-lsp/last-inspection.json` via FileSystemWatcher; auto-refresh
+            7. Factory: `export function registerInspectorPanel(server: IAgentLspServer, context: vscode.ExtensionContext): vscode.Disposable`
+            8. Inside factory: call `vscode.window.createTreeView('agentLsp.inspector', { treeDataProvider })`
+
+            ## Tests to Write (src/inspector-panel.test.ts)
+
+            1. TestTreeItem_ErrorSeverity - error finding gets ThemeIcon('error')
+            2. TestTreeItem_ClickOpensFile - command has correct file URI and position
+            3. TestGetChildren_ParsesFindings - mock response becomes finding array
+            4. TestRefresh_ReloadsData - refresh fires onDidChangeTreeData
+
+            ## Verification Gate
+
+            ```bash
+            npx tsc --noEmit && npx vitest run src/inspector-panel.test.ts
+            ```
+
+            ## Constraints
+
+            - Do NOT import server.ts directly; accept IAgentLspServer as a parameter
+            - Do NOT write findings to disk; only read from MCP resource
+            - Handle null/empty response gracefully (show empty tree)
+            - Use `vscode.EventEmitter<InspectionFinding | undefined | void>` for onDidChangeTreeData
+          files:
+            - "src/inspector-panel.ts"
+            - "src/inspector-panel.test.ts"
+    - number: 2
+      agents:
+        - id: F
+          task: |
+            ## What to Implement
+
+            Implement `src/extension.ts` (VS Code extension entry point) and `README.md`.
+
+            extension.ts wires all modules together: creates the server, status bar,
+            registers skills, decorations, and inspector panel.
+
+            ## Interfaces to Call
+
+            - `createServer(settings, outputChannel)` from `./server`
+            - `createSettingsProvider()` from `./settings`
+            - `createStatusBar(server)` from `./status-bar`
+            - `registerSkills(server, context)` from `./skills`
+            - `registerDecorations(server, context)` from `./decorations`
+            - `registerInspectorPanel(server, context)` from `./inspector-panel`
+
+            ## Key Behaviors
+
+            extension.ts:
+            1. `export async function activate(context: vscode.ExtensionContext)`
+            2. Create output channel: `vscode.window.createOutputChannel('agent-lsp')`
+            3. Create settings provider via `createSettingsProvider()`
+            4. Create server via `createServer(settings, outputChannel)`
+            5. Create status bar via `createStatusBar(server)`, push to subscriptions
+            6. Register commands:
+               - `agent-lsp.restart`: calls server.restart()
+               - `agent-lsp.stop`: calls server.stop()
+               - `agent-lsp.install`: opens terminal, runs `npm install -g @blackwell-systems/agent-lsp`
+            7. Register skills: `registerSkills(server, context)` (fire-and-forget with .catch)
+            8. Register decorations: `registerDecorations(server, context)`, push to subscriptions
+            9. Register inspector panel: `registerInspectorPanel(server, context)`, push to subscriptions
+            10. If settings.getConfig().autoStart is true, call server.start() (fire-and-forget with .catch)
+            11. Push all disposables to context.subscriptions
+
+            `export function deactivate(): void` - calls server.stop()
+
+            README.md:
+            - Title: "agent-lsp for VS Code"
+            - Feature list (6 features with brief descriptions)
+            - Installation: marketplace install + binary install command
+            - Settings table (4 settings)
+            - Link to https://github.com/blackwell-systems/agent-lsp
+
+            ## Tests to Write (src/extension.test.ts)
+
+            1. TestActivate_StartsServerWhenAutoStart - autoStart true triggers server.start
+            2. TestActivate_SkipsStartWhenDisabled - autoStart false, no start call
+            3. TestDeactivate_StopsServer - deactivate calls server.stop
+            4. TestRestartCommand_CallsRestart - command triggers server.restart
+
+            ## Verification Gate
+
+            ```bash
+            npx tsc --noEmit && npx vitest run src/extension.test.ts
+            ```
+
+            ## Constraints
+
+            - Do NOT duplicate logic from module files; only wire them together
+            - Do NOT catch errors from server.start() silently; log to output channel
+            - Do NOT block activation on skills registration (fire-and-forget)
+            - Extension must remain functional even if server.start() fails
+            - Do NOT use em dashes in README; use colons and commas instead
+          files:
+            - "src/extension.ts"
+            - "src/extension.test.ts"
+            - "README.md"
+          dependencies: ["A", "B", "C", "D", "E"]
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: "Scaffold fails to compile (missing @types/vscode or incorrect import)"
+          likelihood: low
+          impact: high
+          mitigation: "Scaffold Agent runs npm install and tsc --noEmit before committing"
+        - scenario: "Wave 1 agents reference vscode APIs not in 1.85.0"
+          likelihood: low
+          impact: medium
+          mitigation: "All APIs used (CodeLens, TreeView, StatusBarItem) exist since VS Code 1.60+"
+        - scenario: "MCP protocol response shape differs from expected"
+          likelihood: medium
+          impact: medium
+          mitigation: "sendRequest returns unknown; callers validate with type guards"
+        - scenario: "vscode namespace mocking breaks vitest"
+          likelihood: medium
+          impact: low
+          mitigation: "Consistent vi.mock('vscode') pattern across all agents"
+        - scenario: "Wave 2 discovers incompatible factory signatures from Wave 1"
+          likelihood: low
+          impact: medium
+          mitigation: "All signatures specified in contracts; consistent (server, context) => Disposable pattern"
+known_issues: []
+completion_reports: {}
+
